@@ -752,6 +752,7 @@ function courseTexts() {
   const out = new Set(); const add = t => { if (t && /[\u10D0-\u10FF]/.test(t)) out.add(t.trim()); };
   LESSONS.forEach(L => { L.words.forEach(w => add(w[0])); L.phrases.forEach(p => add(p[0])); L.dialogue.lines.forEach(l => l[0] !== '—' && add(l[1])); });
   ALPHABET.forEach(a => add(a[3])); READ_EXTRA.forEach(r => add(r[0]));
+  Object.values(VOCAB).forEach(gs => gs.forEach(g => g.items.forEach(it => add(it[0]))));
   Object.keys(DICT).forEach(add); IDIOMS.forEach(i => add(i.geo));
   READER_SAMPLES.forEach(t => textSentences(t.body).forEach(add));
   for (let n = 1; n <= 100; n++) add(numGeo(n)); [200, 300, 400, 500, 600, 700, 800, 900, 1000].forEach(n => add(numGeo(n)));
