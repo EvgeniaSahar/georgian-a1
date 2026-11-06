@@ -62,16 +62,75 @@ function gradeCard(id, q) { // q: 1 забыл, 3 трудно, 4 хорошо, 
 }
 const learnedCount = () => Object.values(S.srs).filter(c => c.r >= 2).length;
 
-// ---------- озвучка ----------
-let kaVoice = null, voiceWarned = false;
+// ---------- озвучка: системный голос (Edge) или нейросеть Piper «Натия» ----------
+let kaVoice = null;
 function pickVoice() { const vs = speechSynthesis.getVoices(); kaVoice = vs.find(v => /^ka(-|_|$)/i.test(v.lang)) || vs.find(v => /georgian|ქართ/i.test(v.name)) || null; }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function speak(text) {
-  if (!kaVoice) { toast('🔇 В этом браузере нет грузинского голоса. Откройте сайт в Microsoft Edge — там есть голоса Eka и Giorgi. А пока читайте по транскрипции.'); return; }
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text); u.voice = kaVoice; u.lang = kaVoice.lang; u.rate = 0.85; speechSynthesis.speak(u);
+const PIPER_VOICE = 'ka_GE-natia-medium';
+const PIPER_URL = 'https://esm.sh/@mintplex-labs/piper-tts-web@1.0.5?deps=onnxruntime-web@1.18.0';
+const PIPER_FLAG = 'bilikebi_piper';
+let piperMod = null, piperSession = null, piperLoading = null;
+let piperStored = (() => { try { return localStorage.getItem(PIPER_FLAG) === '1'; } catch (e) { return false; } })();
+const audioCache = new Map();
+const player = new Audio(); let audioUnlocked = false, playToken = 0;
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+const voicePref = () => S.voice || 'auto'; // auto | piper | system
+function engine() {
+  const p = voicePref();
+  if (p === 'system') return kaVoice ? 'system' : null;
+  if (p === 'piper') return 'piper';
+  return kaVoice ? 'system' : 'piper';
 }
-function speakQueue(texts) { if (!kaVoice) return speak(''); speechSynthesis.cancel(); texts.forEach(t => { const u = new SpeechSynthesisUtterance(t); u.voice = kaVoice; u.lang = kaVoice.lang; u.rate = 0.85; speechSynthesis.speak(u); }); }
+const canAutoSpeak = () => { const e = engine(); return e === 'system' || (e === 'piper' && piperStored); };
+let lastProg = 0;
+function piperProgress(p) {
+  if (!p || !p.total || !/\.onnx$/.test(p.url || '')) return;
+  const pct = Math.round(p.loaded / p.total * 100); if (pct === lastProg) return; lastProg = pct;
+  toast(`⬇️ Загружаю голос «Натия»: ${pct}%`, pct >= 100 ? 1500 : 60000);
+}
+function piperInit() {
+  if (piperSession) return Promise.resolve(piperSession);
+  if (!piperLoading) piperLoading = (async () => {
+    piperMod = piperMod || await import(PIPER_URL);
+    piperSession = await piperMod.TtsSession.create({ voiceId: PIPER_VOICE, progress: piperProgress });
+    piperStored = true; try { localStorage.setItem(PIPER_FLAG, '1'); } catch (e) {}
+    return piperSession;
+  })().catch(e => { piperLoading = null; throw e; });
+  return piperLoading;
+}
+async function piperSynth(text) {
+  if (audioCache.has(text)) return audioCache.get(text);
+  const s = await piperInit();
+  const url = URL.createObjectURL(await s.predict(text));
+  audioCache.set(text, url); return url;
+}
+function stopSpeech() { playToken++; if ('speechSynthesis' in window) speechSynthesis.cancel(); player.pause(); }
+function playUrl(url, token) {
+  return new Promise(res => { if (token !== playToken) return res(); player.onended = res; player.onerror = res; player.src = url; player.play().catch(res); });
+}
+function askPiperDownload() {
+  return confirm('Загрузить нейросетевой грузинский голос «Натия»?\n\nЭто один раз ~60 МБ (лучше по Wi‑Fi). Потом озвучка работает быстро и даже без интернета.');
+}
+async function speakQueue(texts) {
+  texts = texts.filter(t => t && t.trim()); if (!texts.length) return;
+  const e = engine();
+  if (!e) { toast('🔇 Системного грузинского голоса нет. Включите нейросеть «Натия»: «Как учиться» → Озвучка.'); return; }
+  stopSpeech(); const token = playToken;
+  if (e === 'system') { texts.forEach(t => { const u = new SpeechSynthesisUtterance(t); u.voice = kaVoice; u.lang = kaVoice.lang; u.rate = 0.85; speechSynthesis.speak(u); }); return; }
+  if (!audioUnlocked) { player.src = SILENT; player.play().catch(() => {}); audioUnlocked = true; } // разрешение на звук для iPhone
+  if (!piperStored && !piperSession && !askPiperDownload()) return;
+  try {
+    if (!piperSession) toast('⏳ Готовлю голос…', 60000);
+    let next = piperSynth(texts[0]);
+    for (let i = 0; i < texts.length; i++) {
+      const url = await next; if (token !== playToken) return;
+      if (i === 0) $('#toast').classList.remove('show');
+      if (i + 1 < texts.length) next = piperSynth(texts[i + 1]);
+      await playUrl(url, token);
+    }
+  } catch (err) { toast('Не удалось включить нейросетевой голос: ' + (err.message || err)); }
+}
+const speak = text => speakQueue([text]);
 const sayBtn = (geo, cls = '') => `<button class="speak ${cls}" data-say="${esc(geo)}" title="Послушать">🔊</button>`;
 document.addEventListener('click', e => { const b = e.target.closest('[data-say]'); if (b) { e.preventDefault(); e.stopPropagation(); speak(b.dataset.say); } }, true);
 
@@ -94,7 +153,7 @@ document.addEventListener('keydown', e => { if (keyHandler && !e.metaKey && !e.c
 
 // ---------- роутер ----------
 function route() {
-  keyHandler = null; if ('speechSynthesis' in window) speechSynthesis.cancel();
+  keyHandler = null; stopSpeech();
   const [p, a, b] = (location.hash.slice(1) || 'home').split('/');
   const views = { home: viewHome, alphabet: viewAlphabet, lesson: viewLesson, practice: viewPractice, review: viewReview, phrasebook: viewPhrasebook, numbers: viewNumbers, method: viewMethod, reader: viewReader };
   (views[p] || viewHome)(a, b);
@@ -331,12 +390,12 @@ function viewPractice(idArg, kind = 'w') {
     const stage = i / n; // от узнавания к воспроизведению
     if (kind === 'w') {
       const typable = [...it.geo].length <= 9 && /^[ა-ჿ]+$/.test(it.geo);
-      if (stage < .35) return mkMCQ(it, kaVoice && Math.random() < .4 ? 'listen' : 'g2r');
+      if (stage < .35) return mkMCQ(it, canAutoSpeak() && Math.random() < .4 ? 'listen' : 'g2r');
       if (stage < .7 || !typable) return mkMCQ(it, 'r2g');
       return mkType(it);
     } else {
       const buildable = it.geo.split(' ').length >= 2;
-      if (stage < .3) return mkMCQ(it, kaVoice && Math.random() < .4 ? 'listen' : 'g2r');
+      if (stage < .3) return mkMCQ(it, canAutoSpeak() && Math.random() < .4 ? 'listen' : 'g2r');
       if (stage < .55 || !buildable) return mkMCQ(it, 'r2g');
       return mkBuild(it);
     }
@@ -450,7 +509,7 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
     const fb = $('#fb'); fb.className = 'feedback show ' + (ok ? 'ok' : 'bad');
     fb.innerHTML = `<div class="row"><b>${ok ? (['ყოჩაღ! Отлично!', 'სწორია! Верно!', 'Браво! 👏'][Math.floor(Math.random() * 3)]) : 'Не совсем. Правильно:'}</b></div>
       ${ex.geo ? `<div class="row" style="margin-top:6px">${sayBtn(ex.geo)}<div><div class="geo">${esc(ex.geo)}</div><span class="tr" style="color:var(--gold)">${esc(translit(ex.geo))}</span> <span style="color:var(--ink)">— ${esc(ex.ru)}</span></div></div>` : ''}`;
-    if (ex.geo && kaVoice) speak(ex.geo);
+    if (ex.geo && canAutoSpeak()) speak(ex.geo);
     if (ok && !q.tries && !q.hinted) firstTry++;
     if (!ok) { if (!q.tries) missed.push(ex); queue.push({ ...q, tries: q.tries + 1, options: q.options && shuffle(q.options), tokens: q.tokens && shuffle(q.tokens) }); }
     else done++;
@@ -511,7 +570,7 @@ function viewReview() {
         <button class="gr2" data-q="4">Хорошо<small>${c.r === 0 ? '1 дн' : c.r === 1 ? '4 дн' : Math.round(c.i * c.e) + ' дн'}</small></button>
         <button class="gr3" data-q="5">Легко<small>${c.r === 0 ? '3 дн' : c.r === 1 ? '6 дн' : Math.round(c.i * c.e * 1.3) + ' дн'}</small></button>
       </div></div>`;
-    const reveal = () => { if (revealed) return; revealed = true; $('#back').style.display = ''; $('#tapHint').style.display = 'none'; $('#gr').style.display = ''; if (kaVoice) speak(it.kind === 'l' ? it.kw : it.geo); };
+    const reveal = () => { if (revealed) return; revealed = true; $('#back').style.display = ''; $('#tapHint').style.display = 'none'; $('#gr').style.display = ''; if (canAutoSpeak()) speak(it.kind === 'l' ? it.kw : it.geo); };
     $('#fc').onclick = e => { if (!e.target.closest('[data-say]')) reveal(); };
     $$('#gr button').forEach(b => b.onclick = () => grade(+b.dataset.q));
     function grade(q) { gradeCard(id, q); queue.shift(); reviewed++; if (q < 3) queue.splice(Math.min(queue.length, 3 + Math.floor(Math.random() * 3)), 0, id); render(); }
@@ -579,7 +638,7 @@ function viewNumbers(range = '20') {
     if (ok && streak % 10 === 0) addXP(5);
     const f = $('#fb'); f.className = 'feedback show ' + (ok ? 'ok' : 'bad');
     f.innerHTML = `<b>${ok ? 'სწორია! Верно!' : 'Правильно:'}</b> ${esc(x.digits)} = <span class="geo" style="color:var(--ink)">${esc(x.geo)}</span>`;
-    if (kaVoice) speak(x.geo);
+    if (canAutoSpeak()) speak(x.geo);
   }
   next();
 }
@@ -617,8 +676,11 @@ function viewMethod() {
     </div>
     <div class="grid g2">${METHOD.map(([ic, t, d]) => `<div class="card method"><div class="ic">${ic}</div><div><h3>${t}</h3><p class="muted small" style="margin:0">${d}</p></div></div>`).join('')}</div>
     <div class="card" style="margin-top:16px">
-      <h3>🔊 Про озвучку</h3>
-      <p class="small" style="margin:0">Озвучка использует голоса вашей системы. Грузинские голоса гарантированно есть в браузере <b>Microsoft Edge</b> (Windows, Mac, Android, iPhone) — голоса Eka и Giorgi. ${kaVoice ? `<br>✅ Сейчас найден голос: <b>${esc(kaVoice.name)}</b>.` : '<br>⚠️ В текущем браузере грузинский голос не найден — кнопки 🔊 подскажут, что делать.'}</p>
+      <h3>🔊 Озвучка</h3>
+      <p class="small" style="margin-top:0">Два голоса на выбор: <b>нейросеть «Натия»</b> (Piper, открытая модель — работает в любом браузере, один раз скачивается ~60 МБ, потом даже без интернета) и <b>системный голос</b> (есть в Microsoft Edge — Eka и Giorgi). ${kaVoice ? `Системный голос найден: <b>${esc(kaVoice.name)}</b>.` : 'Системного грузинского голоса в этом браузере нет.'}</p>
+      <div class="row">${[['auto', 'Авто'], ['piper', 'Натия (нейросеть)'], ['system', 'Системный']].map(([k, n]) => `<button class="chip ${voicePref() === k ? 'on' : ''}" data-voice="${k}">${n}</button>`).join('')}</div>
+      <p class="small muted">Авто: системный голос, если он есть, иначе «Натия». Сейчас звучит: <b>${engine() === 'system' ? 'системный голос' : engine() === 'piper' ? 'Натия' : 'ничего'}</b>.</p>
+      <div class="row"><button class="btn sm light" id="voiceTest">▶︎ Проверить голос</button>${piperStored ? '<span class="small" style="color:var(--ok)">✓ «Натия» загружена</span><button class="btn sm ghost" id="piperDel">Удалить голос (освободить 60 МБ)</button>' : '<button class="btn sm ghost" id="piperGet">⬇️ Загрузить «Натию» сейчас</button>'}</div>
     </div>
     <div class="card" style="margin-top:16px">
       <h3>⌨️ Грузинская клавиатура</h3>
@@ -629,6 +691,10 @@ function viewMethod() {
       <p class="small">Весь прогресс хранится в этом браузере. Очков: ${S.xp}, карточек: ${Object.keys(S.srs).length}.</p>
       <button class="btn sm ghost" id="reset">Сбросить прогресс</button>
     </div>`;
+  $$('[data-voice]').forEach(b => b.onclick = () => { S.voice = b.dataset.voice; save(); route(); });
+  $('#voiceTest').onclick = () => speak('გამარჯობა! მე ნატია ვარ. ქართულს ერთად ვისწავლით.');
+  const pg = $('#piperGet'); if (pg) pg.onclick = async () => { pg.disabled = true; try { await piperInit(); toast('✓ Голос «Натия» загружен'); route(); } catch (e) { toast('Не удалось загрузить: ' + e.message); pg.disabled = false; } };
+  const pdl = $('#piperDel'); if (pdl) pdl.onclick = async () => { try { piperMod = piperMod || await import(PIPER_URL); await piperMod.remove(PIPER_VOICE); } catch (e) {} piperSession = null; piperLoading = null; piperStored = false; try { localStorage.removeItem(PIPER_FLAG); } catch (e) {} toast('Голос удалён'); route(); };
   $('#reset').onclick = () => { if (confirm('Точно стереть весь прогресс?')) { S = defaults(); save(); toast('Прогресс сброшен'); route(); } };
 }
 
