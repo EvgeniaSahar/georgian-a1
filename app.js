@@ -53,6 +53,7 @@ function addToSRS(ids) { ids.forEach(id => { if (!S.srs[id]) S.srs[id] = { e: 2.
 function dueIds() { const now = Date.now(); return Object.keys(S.srs).filter(id => ITEMS[id] && S.srs[id].due <= now); }
 function gradeCard(id, q) { // q: 1 забыл, 3 трудно, 4 хорошо, 5 легко
   const c = S.srs[id];
+  if (!c.seen) { c.seen = 1; if (S.newDay !== today()) { S.newDay = today(); S.newCount = 0; } S.newCount = (S.newCount || 0) + 1; }
   if (q < 3) { c.r = 0; c.i = 0; c.l++; c.due = Date.now(); }
   else {
     if (c.r === 0) c.i = q === 5 ? 3 : 1;
@@ -154,7 +155,7 @@ function updateHeader() {
   $('#translitBtn').classList.toggle('on', S.translit);
   document.body.classList.toggle('hide-tr', !S.translit);
 }
-$('#translitBtn').onclick = () => { S.translit = !S.translit; save(); toast(S.translit ? 'Транскрипция включена' : 'Транскрипция скрыта — читаем по-грузински 💪', 2000); };
+if ($('#translitBtn')) $('#translitBtn').onclick = () => { S.translit = !S.translit; save(); toast(S.translit ? 'Транскрипция включена' : 'Транскрипция скрыта — читаем по-грузински 💪', 2000); };
 
 // ---------- клавиатура ----------
 let keyHandler = null;
@@ -169,7 +170,7 @@ function route() {
   $$('.topnav a, .bottomnav a').forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + p));
   window.scrollTo(0, 0); updateHeader();
 }
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => route());
 
 // ============================================================
 //  ГЛАВНАЯ
@@ -586,7 +587,7 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
 //  ПОВТОРЕНИЕ (SRS)
 // ============================================================
 function viewReview() {
-  let queue = shuffle(dueIds()).slice(0, 40);
+  let queue = shuffle(dueQueue()).slice(0, 40);
   if (!Object.keys(S.srs).length) {
     app.innerHTML = `<div class="empty"><div class="big">🔁</div><h2>Здесь будут твои карточки</h2><p>Пройди тренировку алфавита или урока — слова автоматически попадут в интервальные повторения.</p><a class="btn" href="#home">К урокам</a></div>`; return;
   }

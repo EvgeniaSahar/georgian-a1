@@ -3,42 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Билики · Грузинский A1</title>
+<meta name="theme-color" content="#FAF7F2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Гза">
+<meta name="description" content="Грузинский для жизни в Грузии: от алфавита до разговоров на рынке, в маршрутке и с соседями. Уровень A1.">
+<title>Гза · грузинский для жизни</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;600;700&family=Noto+Serif+Georgian:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=5">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700&family=Noto+Serif+Georgian:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="ui.css?v=6">
 </head>
 <body>
-<header class="top">
-  <a href="#home" class="brand"><span class="brand-geo">ბილიკი</span><span class="brand-ru">грузинский · A1</span></a>
-  <nav class="topnav">
-    <a href="#home">Главная</a>
-    <a href="#alphabet">Алфавит</a>
-    <a href="#review">Повторение <span id="dueBadge" class="badge"></span></a>
-    <a href="#reader">Читалка</a>
-    <a href="#phrasebook">Разговорник</a>
-  </nav>
-  <div class="top-right">
-    <span id="streak" class="streak" title="Дней подряд">🔥 0</span>
-    <button id="translitBtn" class="chip" title="Показывать транскрипцию">аб</button>
-  </div>
+<a class="skip" href="#app">К содержимому</a>
+<header class="topbar" id="topbar">
+  <a href="#home" class="brand" aria-label="Гза — на главную"><span class="brand-mark">გ</span><span class="brand-name">Гза<small>грузинский для жизни</small></span></a>
+  <nav class="sidenav" aria-label="Разделы"></nav>
+  <div class="top-right"><span id="streak" class="pill streak-pill" title="Дней подряд">🔥 0</span></div>
 </header>
-<main id="app"></main>
-<nav class="bottomnav">
-  <a href="#home">🏠<span>Главная</span></a>
-  <a href="#alphabet">ა<span>Алфавит</span></a>
-  <a href="#review">🔁<span>Повтор</span></a>
-  <a href="#reader">📖<span>Читалка</span></a>
-  <a href="#phrasebook">💬<span>Фразы</span></a>
-</nav>
-<div id="toast"></div>
-<script src="audio/index.js?v=5"></script>
-<script src="data.js?v=5"></script>
-<script src="vocab.js?v=5"></script>
-<script src="dict.js?v=5"></script>
-<script src="morph.js?v=5"></script>
-<script src="app.js?v=5"></script>
-<script src="drills.js?v=5"></script>
-<script src="reader.js?v=5"></script>
+<main id="app" tabindex="-1"></main>
+<nav class="tabbar" aria-label="Разделы"></nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="audio/index.js?v=6"></script>
+<script src="data.js?v=6"></script>
+<script src="vocab.js?v=6"></script>
+<script src="dict.js?v=6"></script>
+<script src="morph.js?v=6"></script>
+<script src="app.js?v=6"></script>
+<script src="drills.js?v=6"></script>
+<script src="ui.js?v=6"></script>
+<script src="reader.js?v=6"></script>
 </body>
 </html>
