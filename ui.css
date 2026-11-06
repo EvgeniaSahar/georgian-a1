@@ -192,7 +192,7 @@ main{max-width:720px;padding:0 16px}
   body{padding-bottom:40px}
   .tabbar{display:none}
   .topbar{display:flex;align-items:center;gap:24px;position:sticky;top:0;z-index:30;padding:10px 24px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-  .sidenav{display:flex;gap:4px;margin:0 auto}
+  .sidenav{display:flex;gap:4px;margin:0 auto 0 0}
   .sidenav a{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:12px;color:var(--muted);font-weight:600;font-size:14px;position:relative}
   .sidenav a .ic{width:20px;height:20px}
   .sidenav a.active{background:var(--brand-soft);color:var(--brand)}

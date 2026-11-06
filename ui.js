@@ -243,7 +243,7 @@ function viewMore() {
   ];
   app.innerHTML = `<div class="page"><header class="page-head"><h1>Ещё</h1></header>
     <div class="list">${rows.map(([h, i, t, m]) => `<a class="row-link" href="${h}"><span class="rl-i ${i === 'ა' ? 'geo' : ''}">${i}</span><span class="rl-b"><b>${t}</b><small>${m}</small></span>${ic('chev', 18)}</a>`).join('')}</div>
-    <div class="card about"><b>Гза · გზა — «путь»</b><p>Курс грузинского для тех, кто живёт в Грузии. Тексты и упражнения написаны для курса; темы идут в порядке, привычном по учебникам для иностранцев. Нашли ошибку в грузинском — <a target="_blank" rel="noopener" href="https://github.com/EvgeniaSahar/georgian-a1/issues/new">сообщите</a>.</p></div>
+    <div class="card about"><b>О курсе</b><p>Курс грузинского для тех, кто живёт в Грузии. Тексты и упражнения написаны для курса; темы идут в порядке, привычном по учебникам для иностранцев. Нашли ошибку в грузинском — <a target="_blank" rel="noopener" href="https://github.com/EvgeniaSahar/georgian-a1/issues/new">сообщите</a>.</p></div>
   </div>`;
 }
 function viewSettings() {
@@ -262,6 +262,6 @@ function viewSettings() {
   $$('[data-set]').forEach(b => b.onclick = () => { S[b.dataset.set] = +b.dataset.v; save(); viewSettings(); });
   $('#swTr').onclick = () => { S.translit = !S.translit; save(); viewSettings(); };
   $('#bkSave').onclick = () => { const blob = new Blob([JSON.stringify({ app: 'gza', v: 1, date: today(), state: S })], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `gza-progress-${today()}.json`; a.click(); toast('Копия сохранена в «Загрузки»'); };
-  $('#bkLoad').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (!j.state || !j.state.srs) throw 0; if (!confirm('Заменить текущий прогресс данными из копии?')) return; S = Object.assign(defaults(), j.state); save(); toast('Прогресс восстановлен ✓'); location.reload(); } catch (err) { toast('Это не файл копии Гза'); } }; r.readAsText(f); };
+  $('#bkLoad').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (!j.state || !j.state.srs) throw 0; if (!confirm('Заменить текущий прогресс данными из копии?')) return; S = Object.assign(defaults(), j.state); save(); toast('Прогресс восстановлен ✓'); location.reload(); } catch (err) { toast('Это не файл резервной копии'); } }; r.readAsText(f); };
   $('#reset').onclick = () => { if (confirm('Точно стереть весь прогресс? Это нельзя отменить.')) { S = defaults(); save(); toast('Прогресс сброшен'); location.hash = 'home'; } };
 }
