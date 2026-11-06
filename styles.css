@@ -268,3 +268,9 @@ table.decl td.hit{background:var(--wine);color:#fff;border-radius:6px;font-weigh
 .vitems{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 .vitems .item{padding:9px 12px}
 .vitems .item .geo{font-size:17px}
+
+/* упражнения */
+.hl{color:var(--gold);border-bottom:2px solid var(--gold)}
+.hl.hard{color:var(--wine);border-bottom-color:var(--wine)}
+.gap{display:inline-block;min-width:.9em;text-align:center;color:var(--wine);background:var(--wine-soft);border-radius:6px;padding:0 4px}
+.saybox{margin-top:8px}

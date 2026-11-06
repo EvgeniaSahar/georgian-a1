@@ -164,7 +164,7 @@ document.addEventListener('keydown', e => { if (keyHandler && !e.metaKey && !e.c
 function route() {
   keyHandler = null; stopSpeech();
   const [p, a, b, c] = (location.hash.slice(1) || 'home').split('/');
-  const views = { home: viewHome, alphabet: viewAlphabet, lesson: viewLesson, practice: viewPractice, review: viewReview, phrasebook: viewPhrasebook, numbers: viewNumbers, method: viewMethod, reader: viewReader };
+  const views = { home: viewHome, alphabet: viewAlphabet, lesson: viewLesson, practice: viewPractice, review: viewReview, phrasebook: viewPhrasebook, numbers: viewNumbers, method: viewMethod, reader: viewReader, drill: viewDrill };
   (views[p] || viewHome)(a, b, c);
   $$('.topnav a, .bottomnav a').forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + p));
   window.scrollTo(0, 0); updateHeader();
@@ -319,7 +319,7 @@ function readingDrill(g) {
 // ============================================================
 //  УРОК
 // ============================================================
-const TABS = [['words', 'Слова'], ['phrases', 'Фразы'], ['vocab', 'Словарь темы'], ['dialogue', 'Диалог'], ['grammar', 'Грамматика'], ['practice', 'Практика'], ['mission', 'Миссия']];
+const TABS = [['words', 'Слова'], ['phrases', 'Фразы'], ['vocab', 'Словарь темы'], ['drills', 'Упражнения'], ['dialogue', 'Диалог'], ['grammar', 'Грамматика'], ['practice', 'Практика'], ['mission', 'Миссия']];
 function itemRow(it) { return `<div class="item">${sayBtn(it.geo)}<div class="txt"><div class="geo">${esc(it.geo)}</div>${trHTML(it.geo)}</div><div class="ru" style="text-align:right;max-width:45%">${esc(it.ru)}</div></div>`; }
 function viewLesson(idArg, tab = 'words') {
   const L = LESSONS.find(x => x.id === +idArg); if (!L) return viewHome();
@@ -339,6 +339,8 @@ function viewLesson(idArg, tab = 'words') {
       <details class="card vgroup" ${gi === 0 ? 'open' : ''}><summary><span class="vname">${esc(g.name)}</span> <span class="muted small">· ${g.items.length} слов${xs[gi] != null ? ` · ✓ ${Math.round(xs[gi] * 100)}%` : ''}</span></summary>
         <div class="row" style="margin:12px 0"><a class="btn sm" href="#practice/${L.id}/x/${gi}">🎯 Тренировать</a><button class="btn sm light" data-addg="${gi}">＋ Всё в повторение</button><button class="btn sm light" data-playg="${gi}">▶︎ Прослушать</button></div>
         <div class="items vitems">${ids.map(itemRow).join('')}</div></details>`; }).join('')}`;
+  } else if (tab === 'drills') {
+    body = drillsTabHTML(L);
   } else if (tab === 'dialogue') {
     const d = L.dialogue;
     const me = 'Анна';
@@ -374,6 +376,7 @@ function viewLesson(idArg, tab = 'words') {
   const pa = $('#playAll'); if (pa) pa.onclick = () => speakQueue(L.items.filter(i => i.kind === (tab === 'words' ? 'w' : 'p')).map(i => i.geo));
   $$('[data-addg]').forEach(b => b.onclick = () => { addToSRS(L.items.filter(i => i.kind === 'x' && i.group === +b.dataset.addg).map(i => i.id)); b.textContent = '✓ В повторении'; b.disabled = true; toast('Слова группы добавлены в повторение 🔁'); });
   $$('[data-playg]').forEach(b => b.onclick = () => speakQueue(L.items.filter(i => i.kind === 'x' && i.group === +b.dataset.playg).map(i => i.geo)));
+  if (tab === 'drills') bindDrillsTab(L);
   const hr = $('#hideRu'); if (hr) hr.onclick = () => { const d = $('#dlg'); d.classList.toggle('hide-ru'); hr.textContent = d.classList.contains('hide-ru') ? '👁 Показать перевод' : '🙈 Скрыть перевод'; };
   const pd = $('#playDlg'); if (pd) pd.onclick = () => speakQueue(L.dialogue.lines.filter(l => l[0] !== '—').map(l => l[1]));
   const mc = $('#missionChk'); if (mc) mc.onchange = () => { st.m = mc.checked; if (mc.checked) { addXP(20); toast('ყოჩაღ! Молодец! 🎉'); } else save(); };
@@ -493,11 +496,15 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
       inner = `<div class="opts">${q.options.map((o, i) => `<button class="opt ${q.optGeo ? 'geo' : ''}" data-v="${esc(o.v)}" ${q.bigOpts ? 'style="font-size:34px;text-align:center"' : ''}><span class="k">${i + 1}</span>${esc(o.text)}${q.optGeo && !q.bigOpts ? ` <span class="tr small" style="margin-left:6px">${esc(translit(o.text))}</span>` : ''}</button>`).join('')}</div>`;
     } else if (q.type === 'build') {
       inner = `<div class="build-answer" id="ba"></div><div class="build-pool" id="bp">${q.tokens.map((t, i) => `<button class="tok" data-i="${i}">${esc(t)}</button>`).join('')}</div>`;
+    } else if (q.type === 'say') {
+      inner = sayPanelHTML(q);
+    } else if (q.type === 'self') {
+      inner = `<div class="feedback show" id="selfAns" style="display:none;background:var(--cream);color:var(--ink)"><div class="q-label">Перевод</div><b>${esc(q.answerText)}</b></div>`;
     } else if (q.type === 'type') {
       inner = `<input class="type-input" id="ti" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ქართულად…"><div id="kbh"></div>
         <p class="muted small">Печатай латиницей на своей клавиатуре — буквы превратятся в грузинские (a→ა, Shift+t→თ). <button class="btn sm light" id="hint" type="button">Подсказка</button></p>`;
     }
-    const promptHTML = q.listen
+    const promptHTML = q.html ? q.html + (q.listen ? `<button class="btn sm light" id="listenBtn" style="margin-top:8px">🔊 Послушать</button>` : '') : q.listen
       ? `<button class="btn" id="listenBtn" style="font-size:22px;padding:18px 28px">🔊 Слушать</button>`
       : `<div class="q-prompt ${q.promptGeo ? 'geo' : ''}" ${q.big ? 'style="font-size:64px"' : ''}>${esc(q.prompt)}</div>${q.promptGeo && !q.hideTr && !q.big ? `<div class="q-sub">${trHTML(q.prompt)}</div>` : '<div class="q-sub"></div>'}`;
     app.innerHTML = `<div class="ex-wrap">
@@ -508,12 +515,17 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
         ${promptHTML}
         ${inner}
         <div class="feedback" id="fb"></div>
-        <div class="ex-foot">${q.type !== 'mcq' ? '<button class="btn ghost" id="skip">Не знаю</button><button class="btn" id="check">Проверить</button>' : ''}<button class="btn" id="next" style="display:none">Дальше →</button></div>
+        <div class="ex-foot">${q.type === 'self' ? '<button class="btn" id="reveal">Показать перевод</button><button class="btn ghost" id="skip" style="display:none">Не знал(а)</button><button class="btn" id="check" style="display:none">Знал(а) ✓</button>' : q.type !== 'mcq' ? `<button class="btn ghost" id="skip">${q.skipLabel || 'Не знаю'}</button><button class="btn" id="check">${q.checkLabel || 'Проверить'}</button>` : ''}<button class="btn" id="next" style="display:none">Дальше →</button></div>
       </div>
       <p class="muted small" style="text-align:center;margin-top:10px">Клавиши: ${q.type === 'mcq' ? '<kbd>1</kbd>–<kbd>4</kbd> выбор, ' : ''}<kbd>Enter</kbd> дальше</p>
     </div>`;
 
-    if (q.listen) { $('#listenBtn').onclick = () => speak(q.listen); setTimeout(() => speak(q.listen), 250); }
+    if (q.listen) { $('#listenBtn').onclick = () => speak(q.listen); if (!q.html) setTimeout(() => speak(q.listen), 250); }
+    if (q.type === 'say') { bindSayPanel(q); $('#check').onclick = () => answer(true); }
+    if (q.type === 'self') {
+      const reveal = () => { $('#selfAns').style.display = ''; $('#reveal').style.display = 'none'; $('#skip').style.display = ''; $('#check').style.display = ''; if (canAutoSpeak(q.prompt)) speak(q.prompt); };
+      $('#reveal').onclick = reveal; $('#check').onclick = () => answer(true);
+    }
     if (q.type === 'mcq') $$('.opt').forEach(b => b.onclick = () => answer(b.dataset.v === String(q.answer), b));
     if (q.type === 'build') {
       const ba = $('#ba'), bp = $('#bp'); const picked = [];
@@ -529,7 +541,7 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
     const sk = $('#skip'); if (sk) sk.onclick = () => answer(false);
     $('#next').onclick = advance;
     keyHandler = e => {
-      if (e.key === 'Enter') { e.preventDefault(); if (answered) advance(); else if ($('#check')) $('#check').click(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); if (answered) advance(); else if ($('#reveal') && $('#reveal').style.display !== 'none') $('#reveal').click(); else if ($('#check')) $('#check').click(); return; }
       if (!answered && q.type === 'mcq' && /^[1-4]$/.test(e.key)) { const b = $$('.opt')[+e.key - 1]; if (b) b.click(); }
     };
   }
@@ -539,15 +551,16 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
     const q = queue[0];
     $$('.opt').forEach(b => { b.disabled = true; if (b.dataset.v === String(q.answer)) b.classList.add('right'); });
     if (btn && !ok) btn.classList.add('wrong');
-    $$('#check,#skip').forEach(b => b.style.display = 'none');
+    $$('#check,#skip,#reveal').forEach(b => b.style.display = 'none'); stopRecording && stopRecording();
     const ti = $('#ti'); if (ti) { ti.readOnly = true; ti.style.borderColor = ok ? 'var(--ok)' : 'var(--bad)'; }
     const ex = q.explain || {};
     const fb = $('#fb'); fb.className = 'feedback show ' + (ok ? 'ok' : 'bad');
-    fb.innerHTML = `<div class="row"><b>${ok ? (['ყოჩაღ! Отлично!', 'სწორია! Верно!', 'Браво! 👏'][Math.floor(Math.random() * 3)]) : 'Не совсем. Правильно:'}</b></div>
+    fb.innerHTML = `<div class="row"><b>${ok ? (['ყოჩაღ! Отлично!', 'სწორია! Верно!', 'Браво! 👏'][Math.floor(Math.random() * 3)]) : q.noRepeat ? 'Ничего, это слово вернётся в повторении:' : 'Не совсем. Правильно:'}</b></div>
       ${ex.geo ? `<div class="row" style="margin-top:6px">${sayBtn(ex.geo)}<div><div class="geo">${esc(ex.geo)}</div><span class="tr" style="color:var(--gold)">${esc(translit(ex.geo))}</span> <span style="color:var(--ink)">— ${esc(ex.ru)}</span></div></div>` : ''}`;
     if (ex.geo && canAutoSpeak(ex.geo)) speak(ex.geo);
     if (ok && !q.tries && !q.hinted) firstTry++;
-    if (!ok) { if (!q.tries) missed.push(ex); queue.push({ ...q, tries: q.tries + 1, options: q.options && shuffle(q.options), tokens: q.tokens && shuffle(q.tokens) }); }
+    if (!ok && q.noRepeat) { if (!q.tries) missed.push(ex); done++; }
+    else if (!ok) { if (!q.tries) missed.push(ex); queue.push({ ...q, tries: q.tries + 1, options: q.options && shuffle(q.options), tokens: q.tokens && shuffle(q.tokens) }); }
     else done++;
     $('#next').style.display = ''; $('#next').focus({ preventScroll: true });
   }
