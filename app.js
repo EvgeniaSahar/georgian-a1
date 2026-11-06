@@ -28,7 +28,7 @@ const READ_EXTRA = [['ლომი','лев'],['სალამი','салям�
 
 // ---------- состояние ----------
 const KEY = 'bilikebi_a1_v1';
-const defaults = () => ({ srs: {}, lessons: {}, groups: {}, xp: 0, streak: { last: null, count: 0 }, translit: true, days: {} });
+const defaults = () => ({ srs: {}, lessons: {}, groups: {}, xp: 0, streak: { last: null, count: 0 }, translit: true, days: {}, texts: [], custom: {} });
 let S;
 try { S = Object.assign(defaults(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { S = defaults(); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} updateHeader(); }
@@ -96,7 +96,7 @@ document.addEventListener('keydown', e => { if (keyHandler && !e.metaKey && !e.c
 function route() {
   keyHandler = null; if ('speechSynthesis' in window) speechSynthesis.cancel();
   const [p, a, b] = (location.hash.slice(1) || 'home').split('/');
-  const views = { home: viewHome, alphabet: viewAlphabet, lesson: viewLesson, practice: viewPractice, review: viewReview, phrasebook: viewPhrasebook, numbers: viewNumbers, method: viewMethod };
+  const views = { home: viewHome, alphabet: viewAlphabet, lesson: viewLesson, practice: viewPractice, review: viewReview, phrasebook: viewPhrasebook, numbers: viewNumbers, method: viewMethod, reader: viewReader };
   (views[p] || viewHome)(a, b);
   $$('.topnav a, .bottomnav a').forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + p));
   window.scrollTo(0, 0); updateHeader();
@@ -148,6 +148,7 @@ function viewHome() {
   <div class="grid g3">
     <a class="card lcard" href="#review"><div class="em">🔁</div><div><div class="t">Повторение</div><div class="muted small">${due ? due + ' карточек ждут' : 'на сегодня всё'}</div></div></a>
     <a class="card lcard" href="#numbers"><div class="em">🔢</div><div><div class="t">Числа и цены</div><div class="muted small">понимать на слух</div></div></a>
+    <a class="card lcard" href="#reader"><div class="em">📖</div><div><div class="t">Читалка</div><div class="muted small">свой текст + разбор слов</div></div></a>
     <a class="card lcard" href="#phrasebook"><div class="em">💬</div><div><div class="t">Разговорник</div><div class="muted small">поиск по всем фразам</div></div></a>
     <a class="card lcard" href="#method"><div class="em">🧠</div><div><div class="t">Как учиться</div><div class="muted small">методика и план</div></div></a>
   </div>`;
@@ -631,4 +632,4 @@ function viewMethod() {
   $('#reset').onclick = () => { if (confirm('Точно стереть весь прогресс?')) { S = defaults(); save(); toast('Прогресс сброшен'); route(); } };
 }
 
-route();
+// route() вызывается в конце reader.js
