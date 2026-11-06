@@ -15,6 +15,11 @@ DICT_RAW.trim().split('\n').forEach(line => {
 // слова из уроков, которых нет в словаре
 LESSONS.forEach(L => L.words.forEach(([geo, ru]) => { const g = geo.replace(/[?!]/g, ''); if (isGeo(g) && !DICT[g]) addDict(g, { ru, pos: '', s: '', u: '' }); }));
 
+// слова из «Словаря темы»
+Object.values(VOCAB).forEach(groups => groups.forEach(g => g.items.forEach(([geo, ru, pos]) => {
+  if (isGeo(geo)) { if (!DICT[geo]) addDict(geo, { ru, pos: pos || 'n', s: '', u: '' }); }
+})));
+
 // ---------- склонение ----------
 const CASES = [
   ['nom', 'Именительный', 'кто? что? — подлежащее; дополнение в прошедшем'],
@@ -124,6 +129,8 @@ EXTRA_FORMS_RAW.trim().split('\n').forEach(line => { const [f, m, d] = line.spli
 
 const IDIOMS = IDIOMS_RAW.trim().split('\n').map(l => { const [g, r] = l.split('|'); return { geo: g.trim(), ru: r.trim(), toks: g.trim().split(' ') }; });
 LESSONS.forEach(L => L.phrases.forEach(([g, r]) => { const t = g.replace(/[?!.,]/g, '').split(' '); if (t.length >= 2 && t.length <= 4 && !IDIOMS.some(i => i.geo === t.join(' '))) IDIOMS.push({ geo: t.join(' '), ru: r, toks: t }); }));
+
+Object.values(VOCAB).forEach(groups => groups.forEach(g => g.items.forEach(([geo, ru]) => { const t = geo.split(' '); if (t.length >= 2 && !IDIOMS.some(i => i.geo === geo)) IDIOMS.push({ geo, ru, toks: t }); })));
 
 // ---------- разбор слова ----------
 const PARTICLES = [['ც', '-ც «тоже, и»: მეც — я тоже'], ['ვე', '-ვე «именно, же, сразу»: ახლავე — сейчас же'], ['ღა', '-ღა «только, уже»'], ['ო', '-ო — передача чужих слов («мол, говорит»)'], ['ა', '-ა — краткое «есть» (= არის): დედაა — это мама']];

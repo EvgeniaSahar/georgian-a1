@@ -21,6 +21,9 @@ LESSONS.forEach(L => {
   L.words.forEach((w, i) => { const it = { id: `${L.id}w${i}`, geo: w[0], ru: w[1], lesson: L.id, kind: 'w' }; ITEMS[it.id] = it; L.items.push(it); });
   L.phrases.forEach((w, i) => { const it = { id: `${L.id}p${i}`, geo: w[0], ru: w[1], lesson: L.id, kind: 'p' }; ITEMS[it.id] = it; L.items.push(it); });
 });
+LESSONS.forEach(L => (VOCAB[L.id] || []).forEach((g, gi) => g.items.forEach(([geo, ru], i) => {
+  const it = { id: `${L.id}x${gi}_${i}`, geo, ru, lesson: L.id, kind: 'x', group: gi }; ITEMS[it.id] = it; L.items.push(it);
+})));
 ALPHABET.forEach((a, i) => { ITEMS['a' + i] = { id: 'a' + i, geo: a[0], ru: `${translit(a[0])} — ${a[2]}`, kw: a[3], kwru: a[4], kind: 'l' }; });
 const letterIdx = ch => ALPHABET.findIndex(a => a[0] === ch);
 
@@ -75,13 +78,17 @@ const audioCache = new Map();
 const player = new Audio(); let audioUnlocked = false, playToken = 0;
 const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 const voicePref = () => S.voice || 'auto'; // auto | piper | system
+// заранее записанные файлы голоса «Натия» для всего курса (работают на любом телефоне)
+const audioKey = t => { let h = 0x811c9dc5; for (const c of t.trim()) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+const AUDIO_SET = new Set((window.AUDIO_FILES || '').split(',').filter(Boolean));
+const hasStatic = t => AUDIO_SET.has(audioKey(t));
 function engine() {
   const p = voicePref();
   if (p === 'system') return kaVoice ? 'system' : null;
   if (p === 'piper') return 'piper';
   return kaVoice ? 'system' : 'piper';
 }
-const canAutoSpeak = () => { const e = engine(); return e === 'system' || (e === 'piper' && piperStored); };
+const canAutoSpeak = t => { const e = engine(); return e === 'system' || (e === 'piper' && (piperStored || (t != null && hasStatic(t)))); };
 let lastProg = 0;
 function piperProgress(p) {
   if (!p || !p.total || !/\.onnx$/.test(p.url || '')) return;
@@ -99,6 +106,7 @@ function piperInit() {
   return piperLoading;
 }
 async function piperSynth(text) {
+  if (hasStatic(text)) return `audio/${audioKey(text)}.m4a`;
   if (audioCache.has(text)) return audioCache.get(text);
   const s = await piperInit();
   const url = URL.createObjectURL(await s.predict(text));
@@ -118,9 +126,10 @@ async function speakQueue(texts) {
   stopSpeech(); const token = playToken;
   if (e === 'system') { texts.forEach(t => { const u = new SpeechSynthesisUtterance(t); u.voice = kaVoice; u.lang = kaVoice.lang; u.rate = 0.85; speechSynthesis.speak(u); }); return; }
   if (!audioUnlocked) { player.src = SILENT; player.play().catch(() => {}); audioUnlocked = true; } // разрешение на звук для iPhone
-  if (!piperStored && !piperSession && !askPiperDownload()) return;
+  const needLive = texts.some(t => !hasStatic(t));
+  if (needLive && !piperStored && !piperSession && !askPiperDownload()) return;
   try {
-    if (!piperSession) toast('⏳ Готовлю голос…', 60000);
+    if (needLive && !piperSession) toast('⏳ Готовлю голос…', 60000);
     let next = piperSynth(texts[0]);
     for (let i = 0; i < texts.length; i++) {
       const url = await next; if (token !== playToken) return;
@@ -128,7 +137,7 @@ async function speakQueue(texts) {
       if (i + 1 < texts.length) next = piperSynth(texts[i + 1]);
       await playUrl(url, token);
     }
-  } catch (err) { toast('Не удалось включить нейросетевой голос: ' + (err.message || err)); }
+  } catch (err) { toast('Эту фразу не получилось озвучить на этом устройстве (' + (err.message || err) + '). Все слова и фразы уроков озвучены заранее и работают везде.', 7000); }
 }
 const speak = text => speakQueue([text]);
 const sayBtn = (geo, cls = '') => `<button class="speak ${cls}" data-say="${esc(geo)}" title="Послушать">🔊</button>`;
@@ -154,9 +163,9 @@ document.addEventListener('keydown', e => { if (keyHandler && !e.metaKey && !e.c
 // ---------- роутер ----------
 function route() {
   keyHandler = null; stopSpeech();
-  const [p, a, b] = (location.hash.slice(1) || 'home').split('/');
+  const [p, a, b, c] = (location.hash.slice(1) || 'home').split('/');
   const views = { home: viewHome, alphabet: viewAlphabet, lesson: viewLesson, practice: viewPractice, review: viewReview, phrasebook: viewPhrasebook, numbers: viewNumbers, method: viewMethod, reader: viewReader };
-  (views[p] || viewHome)(a, b);
+  (views[p] || viewHome)(a, b, c);
   $$('.topnav a, .bottomnav a').forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + p));
   window.scrollTo(0, 0); updateHeader();
 }
@@ -310,7 +319,7 @@ function readingDrill(g) {
 // ============================================================
 //  УРОК
 // ============================================================
-const TABS = [['words', 'Слова'], ['phrases', 'Фразы'], ['dialogue', 'Диалог'], ['grammar', 'Грамматика'], ['practice', 'Практика'], ['mission', 'Миссия']];
+const TABS = [['words', 'Слова'], ['phrases', 'Фразы'], ['vocab', 'Словарь темы'], ['dialogue', 'Диалог'], ['grammar', 'Грамматика'], ['practice', 'Практика'], ['mission', 'Миссия']];
 function itemRow(it) { return `<div class="item">${sayBtn(it.geo)}<div class="txt"><div class="geo">${esc(it.geo)}</div>${trHTML(it.geo)}</div><div class="ru" style="text-align:right;max-width:45%">${esc(it.ru)}</div></div>`; }
 function viewLesson(idArg, tab = 'words') {
   const L = LESSONS.find(x => x.id === +idArg); if (!L) return viewHome();
@@ -322,6 +331,14 @@ function viewLesson(idArg, tab = 'words') {
       <div class="items">${list.map(itemRow).join('')}</div>
       <div class="row" style="margin-top:18px"><a class="btn" href="#practice/${L.id}/${tab === 'words' ? 'w' : 'p'}">🎯 Тренировать ${tab === 'words' ? 'слова' : 'фразы'} →</a>
       <button class="btn ghost" id="playAll">▶︎ Прослушать всё</button></div>`;
+  } else if (tab === 'vocab') {
+    const groups = VOCAB[L.id] || [];
+    const xs = st.x || {};
+    body = `<p class="muted small">Все нужные слова по теме урока, по группам. Учи по одной группе за раз: послушай → потренируй → добавь в повторение. Нажми на группу, чтобы раскрыть список.</p>
+      ${groups.map((g, gi) => { const ids = L.items.filter(i => i.kind === 'x' && i.group === gi); return `
+      <details class="card vgroup" ${gi === 0 ? 'open' : ''}><summary><span class="vname">${esc(g.name)}</span> <span class="muted small">· ${g.items.length} слов${xs[gi] != null ? ` · ✓ ${Math.round(xs[gi] * 100)}%` : ''}</span></summary>
+        <div class="row" style="margin:12px 0"><a class="btn sm" href="#practice/${L.id}/x/${gi}">🎯 Тренировать</a><button class="btn sm light" data-addg="${gi}">＋ Всё в повторение</button><button class="btn sm light" data-playg="${gi}">▶︎ Прослушать</button></div>
+        <div class="items vitems">${ids.map(itemRow).join('')}</div></details>`; }).join('')}`;
   } else if (tab === 'dialogue') {
     const d = L.dialogue;
     const me = 'Анна';
@@ -355,6 +372,8 @@ function viewLesson(idArg, tab = 'words') {
       ${(() => { const i = TABS.findIndex(t => t[0] === tab); return i < TABS.length - 1 ? `<a class="btn light" href="#lesson/${L.id}/${TABS[i + 1][0]}">Дальше: ${TABS[i + 1][1]} →</a>` : nextL ? `<a class="btn light" href="#lesson/${nextL.id}">Следующий урок: ${nextL.emoji} ${esc(nextL.title)} →</a>` : ''; })()}
     </div>`;
   const pa = $('#playAll'); if (pa) pa.onclick = () => speakQueue(L.items.filter(i => i.kind === (tab === 'words' ? 'w' : 'p')).map(i => i.geo));
+  $$('[data-addg]').forEach(b => b.onclick = () => { addToSRS(L.items.filter(i => i.kind === 'x' && i.group === +b.dataset.addg).map(i => i.id)); b.textContent = '✓ В повторении'; b.disabled = true; toast('Слова группы добавлены в повторение 🔁'); });
+  $$('[data-playg]').forEach(b => b.onclick = () => speakQueue(L.items.filter(i => i.kind === 'x' && i.group === +b.dataset.playg).map(i => i.geo)));
   const hr = $('#hideRu'); if (hr) hr.onclick = () => { const d = $('#dlg'); d.classList.toggle('hide-ru'); hr.textContent = d.classList.contains('hide-ru') ? '👁 Показать перевод' : '🙈 Скрыть перевод'; };
   const pd = $('#playDlg'); if (pd) pd.onclick = () => speakQueue(L.dialogue.lines.filter(l => l[0] !== '—').map(l => l[1]));
   const mc = $('#missionChk'); if (mc) mc.onchange = () => { st.m = mc.checked; if (mc.checked) { addXP(20); toast('ყოჩაღ! Молодец! 🎉'); } else save(); };
@@ -364,11 +383,27 @@ function viewLesson(idArg, tab = 'words') {
 //  ПРАКТИКА УРОКА
 // ============================================================
 function distractors(it, n, field) {
-  const same = shuffle(LESSONS.find(L => L.id === it.lesson).items.filter(x => x.kind === it.kind && x.id !== it.id && x[field] !== it[field]));
+  const same = shuffle(LESSONS.find(L => L.id === it.lesson).items.filter(x => x.kind === it.kind && x.id !== it.id && x[field] !== it[field])).sort((a, b) => (b.group === it.group) - (a.group === it.group));
   const other = shuffle(Object.values(ITEMS).filter(x => x.kind === it.kind && x.lesson !== it.lesson));
   const out = [];
   for (const x of [...same, ...other]) { if (out.length >= n) break; if (!out.some(o => o[field] === x[field])) out.push(x); }
   return out;
+}
+function practiceVocab(L, gi) {
+  const groups = VOCAB[L.id] || []; const g = groups[gi]; if (!g) return viewLesson(L.id, 'vocab');
+  const items = shuffle(L.items.filter(i => i.kind === 'x' && i.group === gi));
+  const n = items.length;
+  const qs = items.map((it, i) => {
+    const stage = i / n, typable = [...it.geo].length <= 9 && /^[\u10D0-\u10FF]+$/.test(it.geo);
+    if (stage < .4) return mkMCQ(it, canAutoSpeak(it.geo) && Math.random() < .3 ? 'listen' : 'g2r');
+    if (stage < .75 || !typable) return mkMCQ(it, 'r2g');
+    return mkType(it);
+  });
+  runExercise({
+    title: `${L.emoji} ${g.name}`, questions: qs, back: `#lesson/${L.id}/vocab`,
+    onFinish: score => { const st = lessonState(L.id); st.x = st.x || {}; st.x[gi] = Math.max(st.x[gi] || 0, score); addToSRS(items.map(i => i.id)); addXP(5 + Math.round(score * 15)); },
+    nextLinks: () => gi + 1 < groups.length ? `<a class="btn" href="#practice/${L.id}/x/${gi + 1}">Следующая группа: ${esc(groups[gi + 1].name)} →</a>` : `<a class="btn" href="#lesson/${L.id}/vocab">К словарю темы</a>`,
+  });
 }
 function mkMCQ(it, dir) {
   if (dir === 'listen') return { type: 'mcq', label: 'Послушай и выбери перевод', listen: it.geo, prompt: '🔊', options: shuffle([it, ...distractors(it, 3, 'ru')]).map(x => ({ v: x.id, text: x.ru })), answer: it.id, explain: it };
@@ -382,20 +417,21 @@ function mkBuild(it) {
 }
 function mkType(it) { return { type: 'type', label: 'Напиши по-грузински', prompt: it.ru, answer: it.geo, explain: it }; }
 
-function viewPractice(idArg, kind = 'w') {
+function viewPractice(idArg, kind = 'w', gArg) {
   const L = LESSONS.find(x => x.id === +idArg); if (!L) return viewHome();
+  if (kind === 'x') return practiceVocab(L, +gArg || 0);
   const items = shuffle(L.items.filter(i => i.kind === kind));
   const n = items.length;
   const qs = items.map((it, i) => {
     const stage = i / n; // от узнавания к воспроизведению
     if (kind === 'w') {
       const typable = [...it.geo].length <= 9 && /^[ა-ჿ]+$/.test(it.geo);
-      if (stage < .35) return mkMCQ(it, canAutoSpeak() && Math.random() < .4 ? 'listen' : 'g2r');
+      if (stage < .35) return mkMCQ(it, canAutoSpeak(it.geo) && Math.random() < .4 ? 'listen' : 'g2r');
       if (stage < .7 || !typable) return mkMCQ(it, 'r2g');
       return mkType(it);
     } else {
       const buildable = it.geo.split(' ').length >= 2;
-      if (stage < .3) return mkMCQ(it, canAutoSpeak() && Math.random() < .4 ? 'listen' : 'g2r');
+      if (stage < .3) return mkMCQ(it, canAutoSpeak(it.geo) && Math.random() < .4 ? 'listen' : 'g2r');
       if (stage < .55 || !buildable) return mkMCQ(it, 'r2g');
       return mkBuild(it);
     }
@@ -509,7 +545,7 @@ function runExercise({ title, questions, back, onFinish, nextLinks }) {
     const fb = $('#fb'); fb.className = 'feedback show ' + (ok ? 'ok' : 'bad');
     fb.innerHTML = `<div class="row"><b>${ok ? (['ყოჩაღ! Отлично!', 'სწორია! Верно!', 'Браво! 👏'][Math.floor(Math.random() * 3)]) : 'Не совсем. Правильно:'}</b></div>
       ${ex.geo ? `<div class="row" style="margin-top:6px">${sayBtn(ex.geo)}<div><div class="geo">${esc(ex.geo)}</div><span class="tr" style="color:var(--gold)">${esc(translit(ex.geo))}</span> <span style="color:var(--ink)">— ${esc(ex.ru)}</span></div></div>` : ''}`;
-    if (ex.geo && canAutoSpeak()) speak(ex.geo);
+    if (ex.geo && canAutoSpeak(ex.geo)) speak(ex.geo);
     if (ok && !q.tries && !q.hinted) firstTry++;
     if (!ok) { if (!q.tries) missed.push(ex); queue.push({ ...q, tries: q.tries + 1, options: q.options && shuffle(q.options), tokens: q.tokens && shuffle(q.tokens) }); }
     else done++;
@@ -570,7 +606,7 @@ function viewReview() {
         <button class="gr2" data-q="4">Хорошо<small>${c.r === 0 ? '1 дн' : c.r === 1 ? '4 дн' : Math.round(c.i * c.e) + ' дн'}</small></button>
         <button class="gr3" data-q="5">Легко<small>${c.r === 0 ? '3 дн' : c.r === 1 ? '6 дн' : Math.round(c.i * c.e * 1.3) + ' дн'}</small></button>
       </div></div>`;
-    const reveal = () => { if (revealed) return; revealed = true; $('#back').style.display = ''; $('#tapHint').style.display = 'none'; $('#gr').style.display = ''; if (canAutoSpeak()) speak(it.kind === 'l' ? it.kw : it.geo); };
+    const reveal = () => { if (revealed) return; revealed = true; $('#back').style.display = ''; $('#tapHint').style.display = 'none'; $('#gr').style.display = ''; if (canAutoSpeak(it.kind === 'l' ? it.kw : it.geo)) speak(it.kind === 'l' ? it.kw : it.geo); };
     $('#fc').onclick = e => { if (!e.target.closest('[data-say]')) reveal(); };
     $$('#gr button').forEach(b => b.onclick = () => grade(+b.dataset.q));
     function grade(q) { gradeCard(id, q); queue.shift(); reviewed++; if (q < 3) queue.splice(Math.min(queue.length, 3 + Math.floor(Math.random() * 3)), 0, id); render(); }
@@ -638,7 +674,7 @@ function viewNumbers(range = '20') {
     if (ok && streak % 10 === 0) addXP(5);
     const f = $('#fb'); f.className = 'feedback show ' + (ok ? 'ok' : 'bad');
     f.innerHTML = `<b>${ok ? 'სწორია! Верно!' : 'Правильно:'}</b> ${esc(x.digits)} = <span class="geo" style="color:var(--ink)">${esc(x.geo)}</span>`;
-    if (canAutoSpeak()) speak(x.geo);
+    if (canAutoSpeak(x.geo)) speak(x.geo);
   }
   next();
 }
@@ -698,4 +734,14 @@ function viewMethod() {
   $('#reset').onclick = () => { if (confirm('Точно стереть весь прогресс?')) { S = defaults(); save(); toast('Прогресс сброшен'); route(); } };
 }
 
+function courseTexts() {
+  const out = new Set(); const add = t => { if (t && /[\u10D0-\u10FF]/.test(t)) out.add(t.trim()); };
+  LESSONS.forEach(L => { L.words.forEach(w => add(w[0])); L.phrases.forEach(p => add(p[0])); L.dialogue.lines.forEach(l => l[0] !== '—' && add(l[1])); });
+  ALPHABET.forEach(a => add(a[3])); READ_EXTRA.forEach(r => add(r[0]));
+  Object.keys(DICT).forEach(add); IDIOMS.forEach(i => add(i.geo));
+  READER_SAMPLES.forEach(t => textSentences(t.body).forEach(add));
+  for (let n = 1; n <= 100; n++) add(numGeo(n)); [200, 300, 400, 500, 600, 700, 800, 900, 1000].forEach(n => add(numGeo(n)));
+  add('გამარჯობა! მე ნატია ვარ. ქართულს ერთად ვისწავლით.');
+  return [...out];
+}
 // route() вызывается в конце reader.js

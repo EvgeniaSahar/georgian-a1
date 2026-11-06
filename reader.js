@@ -109,6 +109,9 @@ function md(text) {
 }
 
 // ---------- тексты ----------
+function textSentences(body) {
+  return body.split(/\n\s*\n|\n/).filter(p => p.trim()).flatMap(p => (p.match(/[^.!?…]+[.!?…]*["»“]*\s*/g) || [p]).map(s => s.trim()).filter(Boolean));
+}
 const allTexts = () => [...READER_SAMPLES, ...(S.texts || [])];
 function viewReader(a, b) {
   if (a === 'new' || a === 'edit') return readerEditor(b);

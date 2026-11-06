@@ -258,3 +258,13 @@ table.decl td.hit{background:var(--wine);color:#fff;border-radius:6px;font-weigh
   .rtext{font-size:19px}
   table.decl{font-size:12px} table.decl td.geo{font-size:13px}
 }
+
+/* словарь темы */
+.vgroup{margin-bottom:12px;padding:16px 18px}
+.vgroup summary{cursor:pointer;font-size:17px;font-weight:600;list-style:none}
+.vgroup summary::-webkit-details-marker{display:none}
+.vgroup summary::before{content:'▸ ';color:var(--wine)}
+.vgroup[open] summary::before{content:'▾ '}
+.vitems{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.vitems .item{padding:9px 12px}
+.vitems .item .geo{font-size:17px}
